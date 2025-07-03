@@ -66,17 +66,41 @@ const register = async (req, res) => {
 };
 
 const login = async (req, res) => {
-  res.status(501).json({
-    message: 'Login endpoint - Coming soon',
-    endpoint: 'POST /api/auth/login'
-  });
+  try {
+    const { email, password } = req.body;
+    // Find user by email
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    // Compare password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    // Generate JWT
+    const token = generateToken({ userId: user.id, email: user.email });
+    res.json({
+      message: 'Login successful',
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        createdAt: user.createdAt
+      },
+      token
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Internal server error during login' });
+  }
 };
 
+// For JWT, logout is handled client-side by deleting the token. Optionally, you can blacklist tokens.
 const logout = async (req, res) => {
-  res.status(501).json({
-    message: 'Logout endpoint - Coming soon',
-    endpoint: 'POST /api/auth/logout'
-  });
+  res.json({ message: 'Logout successful (client must delete token)' });
 };
 
 module.exports = {
