@@ -8,6 +8,9 @@ const router = express.Router();
 // Apply auth middleware to all task routes
 router.use(auth);
 
+// Task statistics (place before /:id route)
+router.get('/stats', taskController.getTaskStats);
+
 // Task CRUD routes
 router.get('/', taskController.getAllTasks);
 router.get('/:id', taskController.getTaskById);
