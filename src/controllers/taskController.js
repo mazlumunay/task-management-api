@@ -1,14 +1,55 @@
 const prisma = require('../config/database');
 
-// Get all tasks for the authenticated user
+// Get all tasks for the authenticated user with filtering
 const getAllTasks = async (req, res) => {
   try {
+    const { completed, priority, category, search, sortBy = 'createdAt', order = 'desc' } = req.query;
+    
+    // Build where clause
+    const where = { userId: req.user.userId };
+    
+    if (completed !== undefined) {
+      where.completed = completed === 'true';
+    }
+    
+    if (priority) {
+      where.priority = priority;
+    }
+    
+    if (category) {
+      where.categoryId = parseInt(category);
+    }
+    
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+    
+    // Build order clause
+    const orderBy = {};
+    if (sortBy === 'dueDate') {
+      orderBy.dueDate = order;
+    } else if (sortBy === 'priority') {
+      orderBy.priority = order;
+    } else if (sortBy === 'title') {
+      orderBy.title = order;
+    } else {
+      orderBy.createdAt = order;
+    }
+    
     const tasks = await prisma.task.findMany({
-      where: { userId: req.user.userId },
+      where,
       include: { category: true },
-      orderBy: { createdAt: 'desc' }
+      orderBy
     });
-    res.json(tasks);
+    
+    res.json({
+      tasks,
+      count: tasks.length,
+      filters: { completed, priority, category, search, sortBy, order }
+    });
   } catch (error) {
     console.error('Get all tasks error:', error);
     res.status(500).json({ error: 'Failed to fetch tasks' });
@@ -91,10 +132,91 @@ const deleteTask = async (req, res) => {
   }
 };
 
+// Get task statistics for the authenticated user
+const getTaskStats = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    // Get total counts
+    const totalTasks = await prisma.task.count({ where: { userId } });
+    const completedTasks = await prisma.task.count({ 
+      where: { userId, completed: true } 
+    });
+    const pendingTasks = totalTasks - completedTasks;
+    
+    // Get priority breakdown
+    const priorityStats = await prisma.task.groupBy({
+      by: ['priority'],
+      where: { userId },
+      _count: { priority: true }
+    });
+    
+    // Get overdue tasks
+    const overdueTasks = await prisma.task.count({
+      where: {
+        userId,
+        completed: false,
+        dueDate: { lt: new Date() }
+      }
+    });
+    
+    // Get tasks due today
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const tasksDueToday = await prisma.task.count({
+      where: {
+        userId,
+        completed: false,
+        dueDate: {
+          gte: today.toISOString().split('T')[0],
+          lt: tomorrow.toISOString().split('T')[0]
+        }
+      }
+    });
+    
+    // Get recent activity (tasks created in last 7 days)
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    
+    const recentTasks = await prisma.task.count({
+      where: {
+        userId,
+        createdAt: { gte: weekAgo }
+      }
+    });
+    
+    res.json({
+      overview: {
+        totalTasks,
+        completedTasks,
+        pendingTasks,
+        completionRate: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+      },
+      priorities: priorityStats.reduce((acc, stat) => {
+        acc[stat.priority] = stat._count.priority;
+        return acc;
+      }, {}),
+      urgent: {
+        overdueTasks,
+        tasksDueToday
+      },
+      activity: {
+        recentTasks
+      }
+    });
+  } catch (error) {
+    console.error('Get task stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch task statistics' });
+  }
+};
+
 module.exports = {
   getAllTasks,
   getTaskById,
   createTask,
   updateTask,
-  deleteTask
+  deleteTask,
+  getTaskStats
 };
