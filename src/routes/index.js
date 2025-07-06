@@ -3,6 +3,7 @@ const authRoutes = require('./auth');
 const taskRoutes = require('./tasks');
 const userRoutes = require('./users');
 const categoryRoutes = require('./categories');
+const { healthCheck } = require('../controllers/healthController');
 
 const router = express.Router();
 
@@ -12,14 +13,7 @@ router.use('/tasks', taskRoutes);
 router.use('/users', userRoutes);
 router.use('/categories', categoryRoutes);
 
-// Health check route
-router.get('/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    message: 'Task Management API is running',
-    timestamp: new Date().toISOString(),
-    version: '1.0.0'
-  });
-});
+// Enhanced health check route
+router.get('/health', healthCheck);
 
 module.exports = router;
