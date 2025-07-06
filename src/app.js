@@ -4,16 +4,24 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const routes = require('./routes');
 const errorHandler = require('./middleware/errorHandler');
+const { apiLimiter } = require('./middleware/rateLimiter');
 require('dotenv').config();
 
 const app = express();
 
-// Middleware
+// Security middleware
 app.use(helmet());
 app.use(cors());
+
+// Rate limiting
+app.use('/api', apiLimiter);
+
+// Logging
 app.use(morgan('combined'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// Body parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Routes
 app.use('/api', routes);
