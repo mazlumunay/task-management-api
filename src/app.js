@@ -2,9 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const swaggerUi = require('swagger-ui-express');
 const routes = require('./routes');
 const errorHandler = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimiter');
+const swaggerSpecs = require('./config/swagger');
 require('dotenv').config();
 
 const app = express();
@@ -23,6 +25,12 @@ app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// API Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
+  explorer: true,
+  customCss: '.swagger-ui .topbar { display: none }'
+}));
+
 // Routes
 app.use('/api', routes);
 
@@ -32,6 +40,7 @@ app.get('/', (req, res) => {
     message: 'Task Management API',
     version: '1.0.0',
     status: 'Server is running',
+    documentation: '/api-docs',
     endpoints: {
       health: '/api/health',
       auth: '/api/auth',
