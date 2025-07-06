@@ -1,11 +1,45 @@
 const Joi = require('joi');
+const { validationResult } = require('express-validator');
 
-// User registration validation
+// Express-validator error handler
+const handleValidationErrors = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      error: 'Validation failed',
+      details: errors.array().map(err => `${err.param}: ${err.msg}`).join(', ')
+    });
+  }
+  next();
+};
+
+// User registration validation (enhanced)
 const validateRegistration = (req, res, next) => {
   const schema = Joi.object({
-    username: Joi.string().alphanum().min(3).max(30).required(),
-    email: Joi.string().email().required(),
-    password: Joi.string().min(6).required(),
+    username: Joi.string()
+      .alphanum()
+      .min(3)
+      .max(30)
+      .required()
+      .messages({
+        'string.alphanum': 'Username must only contain alphanumeric characters',
+        'string.min': 'Username must be at least 3 characters long',
+        'string.max': 'Username cannot exceed 30 characters'
+      }),
+    email: Joi.string()
+      .email()
+      .required()
+      .messages({
+        'string.email': 'Please provide a valid email address'
+      }),
+    password: Joi.string()
+      .min(8)
+      .pattern(new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*])'))
+      .required()
+      .messages({
+        'string.min': 'Password must be at least 8 characters long',
+        'string.pattern.base': 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'
+      }),
     firstName: Joi.string().min(2).max(50).optional(),
     lastName: Joi.string().min(2).max(50).optional()
   });
@@ -39,5 +73,6 @@ const validateLogin = (req, res, next) => {
 
 module.exports = {
   validateRegistration,
-  validateLogin
+  validateLogin,
+  handleValidationErrors
 };
