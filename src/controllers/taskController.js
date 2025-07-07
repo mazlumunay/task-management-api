@@ -212,11 +212,111 @@ const getTaskStats = async (req, res) => {
   }
 };
 
+// Bulk operations for tasks
+const bulkUpdateTasks = async (req, res) => {
+  try {
+    const { taskIds, updates } = req.body;
+    
+    if (!Array.isArray(taskIds) || taskIds.length === 0) {
+      return res.status(400).json({ error: 'taskIds must be a non-empty array' });
+    }
+
+    // Verify all tasks belong to the user
+    const userTasks = await prisma.task.findMany({
+      where: {
+        id: { in: taskIds.map(id => Number(id)) },
+        userId: req.user.userId
+      },
+      select: { id: true }
+    });
+
+    if (userTasks.length !== taskIds.length) {
+      return res.status(403).json({ error: 'Some tasks do not belong to you or do not exist' });
+    }
+
+    // Prepare update data
+    const updateData = {};
+    if (updates.completed !== undefined) updateData.completed = updates.completed;
+    if (updates.priority) updateData.priority = updates.priority;
+    if (updates.categoryId !== undefined) updateData.categoryId = updates.categoryId ? Number(updates.categoryId) : null;
+
+    // Perform bulk update
+    const result = await prisma.task.updateMany({
+      where: {
+        id: { in: taskIds.map(id => Number(id)) },
+        userId: req.user.userId
+      },
+      data: updateData
+    });
+
+    // Get updated tasks
+    const updatedTasks = await prisma.task.findMany({
+      where: {
+        id: { in: taskIds.map(id => Number(id)) },
+        userId: req.user.userId
+      },
+      include: { category: true }
+    });
+
+    res.json({
+      message: `${result.count} tasks updated successfully`,
+      updatedCount: result.count,
+      tasks: updatedTasks
+    });
+  } catch (error) {
+    console.error('Bulk update tasks error:', error);
+    res.status(500).json({ error: 'Failed to update tasks' });
+  }
+};
+
+const bulkDeleteTasks = async (req, res) => {
+  try {
+    const { taskIds } = req.body;
+    
+    if (!Array.isArray(taskIds) || taskIds.length === 0) {
+      return res.status(400).json({ error: 'taskIds must be a non-empty array' });
+    }
+
+    // Verify all tasks belong to the user before deletion
+    const userTasks = await prisma.task.findMany({
+      where: {
+        id: { in: taskIds.map(id => Number(id)) },
+        userId: req.user.userId
+      },
+      select: { id: true, title: true }
+    });
+
+    if (userTasks.length === 0) {
+      return res.status(404).json({ error: 'No tasks found or none belong to you' });
+    }
+
+    // Perform bulk delete
+    const result = await prisma.task.deleteMany({
+      where: {
+        id: { in: userTasks.map(task => task.id) },
+        userId: req.user.userId
+      }
+    });
+
+    res.json({
+      message: `${result.count} tasks deleted successfully`,
+      deletedCount: result.count,
+      deletedTasks: userTasks
+    });
+  } catch (error) {
+    console.error('Bulk delete tasks error:', error);
+    res.status(500).json({ error: 'Failed to delete tasks' });
+  }
+};
+
+// Add to module.exports
 module.exports = {
   getAllTasks,
   getTaskById,
   createTask,
   updateTask,
   deleteTask,
-  getTaskStats
+  getTaskStats,
+  bulkUpdateTasks,
+  bulkDeleteTasks
 };
