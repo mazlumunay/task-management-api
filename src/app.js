@@ -6,6 +6,7 @@ const swaggerUi = require('swagger-ui-express');
 const routes = require('./routes');
 const errorHandler = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimiter');
+const requestLogger = require('./middleware/requestLogger');
 const swaggerSpecs = require('./config/swagger');
 require('dotenv').config();
 
@@ -18,8 +19,12 @@ app.use(cors());
 // Rate limiting
 app.use('/api', apiLimiter);
 
+// Trust proxy for accurate IP addresses
+app.set('trust proxy', true);
+
 // Logging
 app.use(morgan('combined'));
+app.use(requestLogger);
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
@@ -41,6 +46,7 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     status: 'Server is running',
     documentation: '/api-docs',
+    requestId: req.requestId,
     endpoints: {
       health: '/api/health',
       auth: '/api/auth',
@@ -57,7 +63,8 @@ app.use(errorHandler);
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
-    error: 'Route not found'
+    error: 'Route not found',
+    requestId: req.requestId
   });
 });
 
